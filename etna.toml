@@ -1,0 +1,137 @@
+name = "rbt-swift"
+language = "Swift"
+description = "Red-black tree workload (Swift / PropertyTestingKit, coverage-guided)."
+strategies = ["ptk"]
+
+# Ported from the canonical ETNA Coq/Rust RBT workload (jwshii/etna
+# workloads/Coq/RBT, mirrored by alpaylan/etna-rust-rbt) — same 13 mutants,
+# tasks, and ground-truth witnesses. Witnesses are in the canonical ETNA wire
+# form (`E`, `(T <color> <left> <key> <val> <right>)`, color `B`/`R`); the
+# decoder also accepts the parenthesized `(E)`/`(B)`/`(R)` spellings the Rust
+# port emits.
+#
+# Mutants are applied via ETNA's marauder source-swap + recompile (the active
+# variant lives in Sources/RBT/Tree.swift); marauder.toml registers Swift as a
+# custom language. The 38 witnesses below all evaluate to `Some true` on the
+# clean implementation (verified by oracle/coq-rbt) and are caught by the named
+# property on the corresponding mutant. The `balance` mutants swap_cd/swap_bc
+# exist in Tree.swift but, like the upstream workload, carry no witness tasks.
+
+mutations = [
+  "delete_4",
+  "insert_1",
+  "insert_2",
+  "insert_3",
+  "delete_5",
+  "miscolor_insert",
+  "miscolor_delete",
+  "miscolor_balLeft",
+  "miscolor_balRight",
+  "miscolor_join_1",
+  "miscolor_join_2",
+  "no_balance_insert_1",
+  "no_balance_insert_2",
+]
+
+[[tasks]]
+mutations = ["delete_4"]
+tasks = [
+  { property = "DeleteDelete", witnesses = [{ input = "((T B (T B E -1 0 E) 0 3 (T B E 3 0 E)) -1 0)" }] },
+  { property = "DeleteModel", witnesses = [{ input = "((T B E 1 0 E) 0)" }] },
+  { property = "DeletePost", witnesses = [{ input = "((T B E 0 0 E) 1 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "(E 0 1 0)" }] },
+  { property = "InsertDelete", witnesses = [{ input = "(E 0 0 0)" }] },
+]
+
+[[tasks]]
+mutations = ["insert_1"]
+tasks = [
+  { property = "InsertPost", witnesses = [{ input = "((T B E -1 1 E) 0 -1 0)" }] },
+  { property = "InsertModel", witnesses = [{ input = "((T B E 1 0 E) 0 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B E 0 0 E) -3 -3 0)" }] },
+  { property = "InsertInsert", witnesses = [{ input = "(E 0 1 0 0)" }] },
+]
+
+[[tasks]]
+mutations = ["insert_2"]
+tasks = [
+  { property = "InsertPost", witnesses = [{ input = "((T B E -1 1 E) 0 0 0)" }] },
+  { property = "InsertModel", witnesses = [{ input = "((T B E 0 0 E) 1 0)" }] },
+  { property = "InsertDelete", witnesses = [{ input = "(E 0 0 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B E -1 0 E) 0 0 1)" }] },
+  { property = "InsertInsert", witnesses = [{ input = "(E 1 0 1 0)" }] },
+]
+
+[[tasks]]
+mutations = ["insert_3"]
+tasks = [
+  { property = "InsertPost", witnesses = [{ input = "((T B E 0 1 E) 0 0 0)" }] },
+  { property = "InsertModel", witnesses = [{ input = "((T B E -1 1 E) -1 0)" }] },
+  { property = "InsertDelete", witnesses = [{ input = "(E 0 0 0)" }] },
+  { property = "InsertInsert", witnesses = [{ input = "(E 3 3 0 1)" }] },
+]
+
+[[tasks]]
+mutations = ["delete_5"]
+tasks = [
+  { property = "DeleteModel", witnesses = [{ input = "((T B (T B E -2 1 E) 0 0 (T B E 1 4 E)) 1)" }] },
+  { property = "DeletePost", witnesses = [{ input = "((T B E 3 0 (T R E 4 0 E)) 4 4)" }] },
+  { property = "DeleteDelete", witnesses = [{ input = "((T B E -4 6 (T R E 9 0 E)) 9 -4)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B E 0 0 E) 1 1 0)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_insert"]
+tasks = [
+  { property = "InsertValid", witnesses = [{ input = "((T B E 0 0 E) 1 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B E 1 0 E) 0 0 0)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_delete"]
+tasks = [
+  { property = "DeleteValid", witnesses = [{ input = "((T B E 0 0 (T R E 1 1 E)) 2)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_balLeft"]
+tasks = [
+  { property = "DeleteValid", witnesses = [{ input = "((T B (T B E -5 0 E) 0 0 (T R (T B E 2 2 E) 5 6 (T B E 6 1 E))) -5)" }] },
+  { property = "DeleteDelete", witnesses = [{ input = "((T B (T B E -2 6 E) -1 0 (T R (T B E 0 0 E) 3 0 (T B E 5 8 E))) 5 -2)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_balRight"]
+tasks = [
+  { property = "DeleteValid", witnesses = [{ input = "((T B (T R (T B E -8 0 E) -2 0 (T B E 0 0 E)) 6 0 (T B E 7 6 E)) 7)" }] },
+  { property = "DeleteDelete", witnesses = [{ input = "((T B (T R (T B E -9 1 E) -8 0 (T B E 0 0 E)) 3 0 (T B E 6 5 E)) -9 6)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_join_1"]
+tasks = [
+  { property = "DeleteValid", witnesses = [{ input = "((T B (T B (T R (T B E -12 2 E) -6 0 (T B E -3 0 E)) -2 0 (T R (T B (T R E 0 0 E) 3 0 E) 4 0 (T B E 5 4 E))) 6 3 (T B (T B E 8 8 E) 9 0 (T B E 10 0 E))) -2)" }] },
+]
+
+[[tasks]]
+mutations = ["miscolor_join_2"]
+tasks = [
+  { property = "DeleteValid", witnesses = [{ input = "((T B (T B E -5 0 (T R E -4 1 E)) -1 0 (T B (T R E 2 0 E) 4 0 E)) -1)" }] },
+  { property = "DeleteDelete", witnesses = [{ input = "((T (B) (T (B) (E) 0 0 (E)) 1 0 (T (R) (T (B) (E) 2 0 (T (R) (E) 3 0 (E))) 4 0 (T (B) (E) 5 0 (E)))) 4 0)" }] },
+]
+
+[[tasks]]
+mutations = ["no_balance_insert_1"]
+tasks = [
+  { property = "InsertValid", witnesses = [{ input = "((T B (T R E 1 1 E) 2 2 E) 0 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B (T R (T B E -8 0 E) 0 0 (T B E 1 0 (T R E 4 2 E))) 5 3 (T B E 7 4 E)) 7 2 0)" }] },
+  { property = "InsertDelete", witnesses = [{ input = "(E 0 0 0)" }] },
+]
+
+[[tasks]]
+mutations = ["no_balance_insert_2"]
+tasks = [
+  { property = "InsertValid", witnesses = [{ input = "((T B E -1 0 E) 0 0)" }] },
+  { property = "DeleteInsert", witnesses = [{ input = "((T B E 0 0 E) 3 3 0)" }] },
+  { property = "InsertDelete", witnesses = [{ input = "(E 0 0 0)" }] },
+]
