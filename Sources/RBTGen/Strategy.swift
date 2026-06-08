@@ -77,21 +77,11 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
     func elapsed() -> UInt64 { DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds }
 
     do {
-        let stopAtFirstCounterexample = FuzzPlugin<I>(
-            id: "stop_at_first_counterexample",
-            handleSync: { _ in [] },
-            handleAsync: { event in
-                if case .failureFound = event {
-                    return [.stop(FuzzPluginAction<I>.StopAction(reason: .custom("counterexample_found")))]
-                }
-                return []
-            }
-        )
         let result = try await fuzz(
             duration: duration,
             persistence: .ephemeral,
             parallelism: enginesParallelism,
-            plugins: { [.corpusMutation(), stopAtFirstCounterexample] }
+            plugins: { [.corpusMutation(), .stopOnFirstFailure(reason: .custom("counterexample_found"))] }
         ) { (input: I) in
             switch check(input) {
             case .some(false): throw PropertyViolation(wire: wire(input))
