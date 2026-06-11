@@ -69,6 +69,7 @@ let enginesParallelism: Int = {
 private func runFuzz<I: MutatorProviding & Codable & Sendable>(
     _ type: I.Type,
     duration: Duration,
+    coverageStrategy: CoverageStrategy,
     wire: @escaping @Sendable (I) -> String,
     check: @escaping @Sendable (I) -> Bool?
 ) async -> SolveOutcome {
@@ -80,6 +81,7 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
         let result = try await fuzz(
             duration: duration,
             persistence: .ephemeral,
+            coverageStrategy: coverageStrategy,
             parallelism: enginesParallelism,
             plugins: { [.corpusMutation(), .stopOnFirstFailure(reason: .custom("counterexample_found"))] }
         ) { (input: I) in
@@ -113,41 +115,58 @@ public let rbtProperties = [
     "InsertInsert", "InsertDelete", "DeleteInsert", "DeleteDelete",
 ]
 
-public enum SolveError: Error { case unknownProperty(String) }
+public enum SolveError: Error { case unknownProperty(String), unknownStrategy(String) }
 
-/// Coverage-guided solve: fuzz `property` for `duration`. The mutant under test
-/// is whichever marauder variant is active in the compiled `RBT` module.
-public func solve(property: String, duration: Duration) async throws -> SolveOutcome {
+/// The PTK coverage strategies this workload exposes as ETNA strategy names.
+/// `ptk` stays as a back-compat alias for the default (`.pathTrie`).
+public func coverageStrategy(named name: String) throws -> CoverageStrategy {
+    switch name {
+    case "ptk", "ptk-pathtrie": return .pathTrie
+    case "ptk-signaturematch": return .signatureMatch
+    case "ptk-newedge": return .newEdge
+    case "ptk-hitcountbuckets": return .hitCountBuckets
+    default: throw SolveError.unknownStrategy(name)
+    }
+}
+
+/// Coverage-guided solve: fuzz `property` for `duration` judging novelty with
+/// `coverageStrategy`. The mutant under test is whichever marauder variant is
+/// active in the compiled `RBT` module.
+public func solve(
+    property: String,
+    duration: Duration,
+    coverageStrategy: CoverageStrategy = .pathTrie
+) async throws -> SolveOutcome {
     switch property {
     case "InsertValid":
-        return await runFuzz(ArgTII.self, duration: duration,
+        return await runFuzz(ArgTII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_insert_valid($0.t, $0.k, $0.k2) })
     case "DeleteValid":
-        return await runFuzz(ArgTI.self, duration: duration,
+        return await runFuzz(ArgTI.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_delete_valid($0.t, $0.k) })
     case "InsertPost":
-        return await runFuzz(ArgTIII.self, duration: duration,
+        return await runFuzz(ArgTIII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_insert_post($0.t, $0.k, $0.k2, $0.v) })
     case "DeletePost":
-        return await runFuzz(ArgTII.self, duration: duration,
+        return await runFuzz(ArgTII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_delete_post($0.t, $0.k, $0.k2) })
     case "InsertModel":
-        return await runFuzz(ArgTII.self, duration: duration,
+        return await runFuzz(ArgTII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_insert_model($0.t, $0.k, $0.k2) })
     case "DeleteModel":
-        return await runFuzz(ArgTI.self, duration: duration,
+        return await runFuzz(ArgTI.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_delete_model($0.t, $0.k) })
     case "InsertInsert":
-        return await runFuzz(ArgTIIII.self, duration: duration,
+        return await runFuzz(ArgTIIII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_insert_insert($0.t, $0.k, $0.k2, $0.v, $0.v2) })
     case "InsertDelete":
-        return await runFuzz(ArgTIII.self, duration: duration,
+        return await runFuzz(ArgTIII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_insert_delete($0.t, $0.k, $0.k2, $0.v) })
     case "DeleteInsert":
-        return await runFuzz(ArgTIII.self, duration: duration,
+        return await runFuzz(ArgTIII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_delete_insert($0.t, $0.k, $0.k2, $0.v) })
     case "DeleteDelete":
-        return await runFuzz(ArgTII.self, duration: duration,
+        return await runFuzz(ArgTII.self, duration: duration, coverageStrategy: coverageStrategy,
                              wire: { $0.wire }, check: { prop_delete_delete($0.t, $0.k, $0.k2) })
     default:
         throw SolveError.unknownProperty(property)
