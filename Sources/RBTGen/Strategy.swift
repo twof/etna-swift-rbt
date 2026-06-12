@@ -84,13 +84,19 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
             coverageStrategy: coverageStrategy,
             // PTK_SCHEDULER selects the pool configuration: "culled" bounds
             // the pool by feature ownership, "entropic" weights draws by
-            // rare-feature information gain, "entropic-culled" composes both.
+            // rare-feature information gain, "entropic-culled" composes both,
+            // "entropic-culled-burst" adds entropic per-entry burst lengths.
             scheduler: {
                 switch ProcessInfo.processInfo.environment["PTK_SCHEDULER"] {
                 case "culled": return .weightedPool(admission: .featureOwnership)
                 case "entropic": return .weightedPool(policies: { [EntropicWeightPolicy()] })
                 case "entropic-culled":
                     return .weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] })
+                case "entropic-culled-burst":
+                    // TODO: pass adviseBurstLength: 16 once PTK stage 5 lands.
+                    return .weightedPool(
+                        admission: .featureOwnership,
+                        policies: { [EntropicWeightPolicy()] })
                 default: return .weightedPool()
                 }
             }(),
