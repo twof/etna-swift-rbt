@@ -7,7 +7,10 @@ import PropertyTestingKit
 /// legitimate strategy knob; cf. ETNA §4.2 on sized generation.)
 let smallInt = Mutator<Int>(
     seeds: [-2, -1, 0, 1, 2, 3],
-    mutate: { v in [v &+ 1, v &- 1, 0, 0 &- v] },
+    mutate: { v, rng in
+        let candidates = [v &+ 1, v &- 1, 0, 0 &- v]
+        return candidates[Int.random(in: 0..<candidates.count, using: &rng)]
+    },
     // Range matches the tree-key range so a delete/find key argument lands on an
     // existing node often enough to exercise the deletion-rebalancing paths.
     generate: { rng in Int.random(in: -12...12, using: &rng) }
@@ -71,12 +74,13 @@ func genTree(_ rng: inout FastRNG, _ depth: Int) -> Tree {
     return t
 }
 
-func mutateTree(_ t: Tree) -> [Tree] {
+func mutateTree(_ t: Tree, _ rng: inout FastRNG) -> Tree {
+    let candidates: [Tree]
     switch t {
     case .E:
-        return [gInsert(0, 0, .E), gInsert(1, 0, .E), gInsert(-1, 0, .E)]
+        candidates = [gInsert(0, 0, .E), gInsert(1, 0, .E), gInsert(-1, 0, .E)]
     case let .T(c, l, k, v, r):
-        return [
+        candidates = [
             gInsert(k &+ 1, 0, t),         // valid-preserving: insert a fresh key
             gInsert(k &- 1, 0, t),
             gInsert(k, v &+ 1, t),         // valid-preserving: update a value
@@ -86,6 +90,8 @@ func mutateTree(_ t: Tree) -> [Tree] {
             .T(c, r, k, v, l),             // structural: swap children
         ]
     }
+    guard !candidates.isEmpty else { return t }
+    return candidates[Int.random(in: 0..<candidates.count, using: &rng)]
 }
 
 /// A type-based tree generator (arbitrary colored trees, not valid-by-
@@ -100,7 +106,7 @@ extension Tree: MutatorProviding {
                 .T(.B, .T(.R, .E, 0, 0, .E), 1, 0, .T(.R, .E, 2, 0, .E)),
                 .T(.B, .E, 1, 0, .T(.R, .E, 2, 0, .E)),
             ],
-            mutate: { mutateTree($0) },
+            mutate: { mutateTree($0, &$1) },
             generate: { genTree(&$0, 4) }
         )
     }
@@ -113,9 +119,12 @@ struct ArgTI: Codable, Sendable, MutatorProviding {
     var wire: String { "(\(t) \(k))" }
     static var defaultMutator: Mutator<ArgTI> {
         Mutator(seeds: [ArgTI(t: .E, k: 0)],
-                mutate: { x in
-                    mutateTree(x.t).prefix(2).map { ArgTI(t: $0, k: x.k) }
-                    + smallInt.mutate(x.k).prefix(2).map { ArgTI(t: x.t, k: $0) }
+                mutate: { x, rng in
+                    // Pick ONE field to mutate (weights match the old candidate counts).
+                    switch Int.random(in: 0..<4, using: &rng) {
+                    case 0, 1: return ArgTI(t: mutateTree(x.t, &rng), k: x.k)
+                    default: return ArgTI(t: x.t, k: smallInt.mutate(x.k, &rng))
+                    }
                 },
                 generate: { ArgTI(t: genTree(&$0, 4), k: smallInt.generate(&$0)) })
     }
@@ -126,10 +135,12 @@ struct ArgTII: Codable, Sendable, MutatorProviding {
     var wire: String { "(\(t) \(k) \(k2))" }
     static var defaultMutator: Mutator<ArgTII> {
         Mutator(seeds: [ArgTII(t: .E, k: 0, k2: 0)],
-                mutate: { x in
-                    mutateTree(x.t).prefix(2).map { ArgTII(t: $0, k: x.k, k2: x.k2) }
-                    + smallInt.mutate(x.k).prefix(1).map { ArgTII(t: x.t, k: $0, k2: x.k2) }
-                    + smallInt.mutate(x.k2).prefix(1).map { ArgTII(t: x.t, k: x.k, k2: $0) }
+                mutate: { x, rng in
+                    switch Int.random(in: 0..<4, using: &rng) {
+                    case 0, 1: return ArgTII(t: mutateTree(x.t, &rng), k: x.k, k2: x.k2)
+                    case 2: return ArgTII(t: x.t, k: smallInt.mutate(x.k, &rng), k2: x.k2)
+                    default: return ArgTII(t: x.t, k: x.k, k2: smallInt.mutate(x.k2, &rng))
+                    }
                 },
                 generate: { ArgTII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0)) })
     }
@@ -140,11 +151,13 @@ struct ArgTIII: Codable, Sendable, MutatorProviding {
     var wire: String { "(\(t) \(k) \(k2) \(v))" }
     static var defaultMutator: Mutator<ArgTIII> {
         Mutator(seeds: [ArgTIII(t: .E, k: 0, k2: 0, v: 0)],
-                mutate: { x in
-                    mutateTree(x.t).prefix(2).map { ArgTIII(t: $0, k: x.k, k2: x.k2, v: x.v) }
-                    + smallInt.mutate(x.k).prefix(1).map { ArgTIII(t: x.t, k: $0, k2: x.k2, v: x.v) }
-                    + smallInt.mutate(x.k2).prefix(1).map { ArgTIII(t: x.t, k: x.k, k2: $0, v: x.v) }
-                    + smallInt.mutate(x.v).prefix(1).map { ArgTIII(t: x.t, k: x.k, k2: x.k2, v: $0) }
+                mutate: { x, rng in
+                    switch Int.random(in: 0..<5, using: &rng) {
+                    case 0, 1: return ArgTIII(t: mutateTree(x.t, &rng), k: x.k, k2: x.k2, v: x.v)
+                    case 2: return ArgTIII(t: x.t, k: smallInt.mutate(x.k, &rng), k2: x.k2, v: x.v)
+                    case 3: return ArgTIII(t: x.t, k: x.k, k2: smallInt.mutate(x.k2, &rng), v: x.v)
+                    default: return ArgTIII(t: x.t, k: x.k, k2: x.k2, v: smallInt.mutate(x.v, &rng))
+                    }
                 },
                 generate: { ArgTIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0)) })
     }
@@ -155,12 +168,14 @@ struct ArgTIIII: Codable, Sendable, MutatorProviding {
     var wire: String { "(\(t) \(k) \(k2) \(v) \(v2))" }
     static var defaultMutator: Mutator<ArgTIIII> {
         Mutator(seeds: [ArgTIIII(t: .E, k: 0, k2: 0, v: 0, v2: 0)],
-                mutate: { x in
-                    mutateTree(x.t).prefix(2).map { ArgTIIII(t: $0, k: x.k, k2: x.k2, v: x.v, v2: x.v2) }
-                    + smallInt.mutate(x.k).prefix(1).map { ArgTIIII(t: x.t, k: $0, k2: x.k2, v: x.v, v2: x.v2) }
-                    + smallInt.mutate(x.k2).prefix(1).map { ArgTIIII(t: x.t, k: x.k, k2: $0, v: x.v, v2: x.v2) }
-                    + smallInt.mutate(x.v).prefix(1).map { ArgTIIII(t: x.t, k: x.k, k2: x.k2, v: $0, v2: x.v2) }
-                    + smallInt.mutate(x.v2).prefix(1).map { ArgTIIII(t: x.t, k: x.k, k2: x.k2, v: x.v, v2: $0) }
+                mutate: { x, rng in
+                    switch Int.random(in: 0..<6, using: &rng) {
+                    case 0, 1: return ArgTIIII(t: mutateTree(x.t, &rng), k: x.k, k2: x.k2, v: x.v, v2: x.v2)
+                    case 2: return ArgTIIII(t: x.t, k: smallInt.mutate(x.k, &rng), k2: x.k2, v: x.v, v2: x.v2)
+                    case 3: return ArgTIIII(t: x.t, k: x.k, k2: smallInt.mutate(x.k2, &rng), v: x.v, v2: x.v2)
+                    case 4: return ArgTIIII(t: x.t, k: x.k, k2: x.k2, v: smallInt.mutate(x.v, &rng), v2: x.v2)
+                    default: return ArgTIIII(t: x.t, k: x.k, k2: x.k2, v: x.v, v2: smallInt.mutate(x.v2, &rng))
+                    }
                 },
                 generate: { ArgTIIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0), v2: smallInt.generate(&$0)) })
     }
