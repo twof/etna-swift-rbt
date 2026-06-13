@@ -107,7 +107,9 @@ extension Tree: MutatorProviding {
                 .T(.B, .E, 1, 0, .T(.R, .E, 2, 0, .E)),
             ],
             mutate: { mutateTree($0, &$1) },
-            generate: { genTree(&$0, 4) }
+            generate: { genTree(&$0, 4) },
+            // Real REDUCE/eviction size metric: wire length.
+            size: { $0.description.count }
         )
     }
 }
@@ -126,7 +128,8 @@ struct ArgTI: Codable, Sendable, MutatorProviding {
                     default: return ArgTI(t: x.t, k: smallInt.mutate(x.k, &rng))
                     }
                 },
-                generate: { ArgTI(t: genTree(&$0, 4), k: smallInt.generate(&$0)) })
+                generate: { ArgTI(t: genTree(&$0, 4), k: smallInt.generate(&$0)) },
+                size: { $0.wire.count })
     }
 }
 
@@ -142,7 +145,8 @@ struct ArgTII: Codable, Sendable, MutatorProviding {
                     default: return ArgTII(t: x.t, k: x.k, k2: smallInt.mutate(x.k2, &rng))
                     }
                 },
-                generate: { ArgTII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0)) })
+                generate: { ArgTII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0)) },
+                size: { $0.wire.count })
     }
 }
 
@@ -159,7 +163,8 @@ struct ArgTIII: Codable, Sendable, MutatorProviding {
                     default: return ArgTIII(t: x.t, k: x.k, k2: x.k2, v: smallInt.mutate(x.v, &rng))
                     }
                 },
-                generate: { ArgTIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0)) })
+                generate: { ArgTIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0)) },
+                size: { $0.wire.count })
     }
 }
 
@@ -177,6 +182,7 @@ struct ArgTIIII: Codable, Sendable, MutatorProviding {
                     default: return ArgTIIII(t: x.t, k: x.k, k2: x.k2, v: x.v, v2: smallInt.mutate(x.v2, &rng))
                     }
                 },
-                generate: { ArgTIIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0), v2: smallInt.generate(&$0)) })
+                generate: { ArgTIIII(t: genTree(&$0, 4), k: smallInt.generate(&$0), k2: smallInt.generate(&$0), v: smallInt.generate(&$0), v2: smallInt.generate(&$0)) },
+                size: { $0.wire.count })
     }
 }
