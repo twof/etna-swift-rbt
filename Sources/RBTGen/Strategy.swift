@@ -82,13 +82,16 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
             duration: duration,
             persistence: .ephemeral,
             coverageStrategy: coverageStrategy,
-            // PTK_SCHEDULER selects the pool configuration: "culled" bounds
-            // the pool by feature ownership, "entropic" weights draws by
-            // rare-feature information gain, "entropic-culled" composes both,
+            // PTK_SCHEDULER selects the pool configuration. The DEFAULT is now
+            // feature-ownership culling (PTK's flipped library default — a bare
+            // .weightedPool() culls). "everydiscovery" restores the old
+            // keep-everything behavior; "entropic" weights draws by rare-feature
+            // information gain; "entropic-culled" composes both;
             // "entropic-culled-burst" adds entropic per-entry burst lengths.
             scheduler: {
                 switch ProcessInfo.processInfo.environment["PTK_SCHEDULER"] {
                 case "culled": return .weightedPool(admission: .featureOwnership)
+                case "everydiscovery": return .weightedPool(admission: .everyDiscovery)
                 case "entropic": return .weightedPool(policies: { [EntropicWeightPolicy()] })
                 case "entropic-culled":
                     return .weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] })
