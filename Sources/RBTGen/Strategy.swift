@@ -84,23 +84,23 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
             coverageStrategy: coverageStrategy,
             // PTK_SCHEDULER selects the pool configuration. The DEFAULT is now
             // feature-ownership culling (PTK's flipped library default — a bare
-            // .weightedPool() culls). "everydiscovery" restores the old
+            // MutationScheduler.weightedPool() culls). "everydiscovery" restores the old
             // keep-everything behavior; "entropic" weights draws by rare-feature
             // information gain; "entropic-culled" composes both;
             // "entropic-culled-burst" adds entropic per-entry burst lengths.
             scheduler: {
                 switch ProcessInfo.processInfo.environment["PTK_SCHEDULER"] {
-                case "culled": return .weightedPool(admission: .featureOwnership)
-                case "everydiscovery": return .weightedPool(admission: .everyDiscovery)
-                case "entropic": return .weightedPool(policies: { [EntropicWeightPolicy()] })
+                case "culled": return MutationScheduler.weightedPool(admission: .featureOwnership)
+                case "everydiscovery": return MutationScheduler.weightedPool(admission: .everyDiscovery)
+                case "entropic": return MutationScheduler.weightedPool(policies: { [EntropicWeightPolicy()] })
                 case "entropic-culled":
-                    return .weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] })
+                    return MutationScheduler.weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] })
                 case "entropic-culled-burst":
-                    // TODO: pass adviseBurstLength: 16 once PTK stage 5 lands.
-                    return .weightedPool(
+                    // Alias of "entropic-culled": PTK's per-entry burst model was superseded by the generation ratio.
+                    return MutationScheduler.weightedPool(
                         admission: .featureOwnership,
                         policies: { [EntropicWeightPolicy()] })
-                default: return .weightedPool()
+                default: return MutationScheduler.weightedPool()
                 }
             }(),
             parallelism: enginesParallelism,
