@@ -81,7 +81,6 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
         let result = try await fuzz(
             duration: duration,
             persistence: .ephemeral,
-            coverageStrategy: coverageStrategy,
             // PTK_SCHEDULER selects the pool configuration. The DEFAULT is now
             // feature-ownership culling (PTK's flipped library default — a bare
             // MutationScheduler.weightedPool() culls). "everydiscovery" restores the old
@@ -90,17 +89,18 @@ private func runFuzz<I: MutatorProviding & Codable & Sendable>(
             // "entropic-culled-burst" adds entropic per-entry burst lengths.
             scheduler: {
                 switch ProcessInfo.processInfo.environment["PTK_SCHEDULER"] {
-                case "culled": return MutationScheduler.weightedPool(admission: .featureOwnership)
-                case "everydiscovery": return MutationScheduler.weightedPool(admission: .everyDiscovery)
-                case "entropic": return MutationScheduler.weightedPool(policies: { [EntropicWeightPolicy()] })
+                case "culled": return MutationScheduler.weightedPool(admission: .featureOwnership, coverageStrategy: coverageStrategy)
+                case "everydiscovery": return MutationScheduler.weightedPool(admission: .everyDiscovery, coverageStrategy: coverageStrategy)
+                case "entropic": return MutationScheduler.weightedPool(policies: { [EntropicWeightPolicy()] }, coverageStrategy: coverageStrategy)
                 case "entropic-culled":
-                    return MutationScheduler.weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] })
+                    return MutationScheduler.weightedPool(admission: .featureOwnership, policies: { [EntropicWeightPolicy()] }, coverageStrategy: coverageStrategy)
                 case "entropic-culled-burst":
                     // Alias of "entropic-culled": PTK's per-entry burst model was superseded by the generation ratio.
                     return MutationScheduler.weightedPool(
                         admission: .featureOwnership,
-                        policies: { [EntropicWeightPolicy()] })
-                default: return MutationScheduler.weightedPool()
+                        policies: { [EntropicWeightPolicy()] },
+                        coverageStrategy: coverageStrategy)
+                default: return MutationScheduler.weightedPool(coverageStrategy: coverageStrategy)
                 }
             }(),
             parallelism: enginesParallelism,
